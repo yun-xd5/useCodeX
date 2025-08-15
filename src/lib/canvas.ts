@@ -10,13 +10,21 @@
  * @param ctx 2D コンテキスト
  * @returns 現在の DPR
  */
+// 実効的なビューポートサイズを取得（モバイルのアドレスバー縮み等に追随）
+function viewportSize(): { width: number; height: number } {
+  const vv = window.visualViewport;
+  if (vv) {
+    return { width: Math.floor(vv.width), height: Math.floor(vv.height) };
+  }
+  return { width: Math.floor(window.innerWidth), height: Math.floor(window.innerHeight) };
+}
+
 export function fitCanvasToWindow(
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D
 ): number {
   const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
-  const cssWidth = Math.floor(window.innerWidth);
-  const cssHeight = Math.floor(window.innerHeight);
+  const { width: cssWidth, height: cssHeight } = viewportSize();
 
   // 必要なときだけ実サイズ更新（毎回行うと描画がクリアされるため）
   const targetW = cssWidth * dpr;
@@ -48,11 +56,9 @@ export function createCtx2D(canvas: HTMLCanvasElement): CanvasRenderingContext2D
  * 指定色で画面全体をクリアします。
  */
 export function clear(ctx: CanvasRenderingContext2D, color = "#0b0d12"): void {
-  const w = Math.floor(window.innerWidth);
-  const h = Math.floor(window.innerHeight);
+  const { width: w, height: h } = viewportSize();
   ctx.save();
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, w, h);
   ctx.restore();
 }
-

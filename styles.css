@@ -4,6 +4,8 @@
 */
 html, body {
   height: 100%;
+  /* スクロール系ジェスチャーでの画面移動を抑制（Pull-to-refresh 等） */
+  overscroll-behavior: none;
 }
 
 * {
@@ -20,8 +22,9 @@ body {
 /* 描画用キャンバスをビューポートいっぱいに広げる */
 canvas#app {
   display: block;
+  /* 初期レイアウトの目安（実サイズは JS 側で厳密調整） */
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
   touch-action: none; /* ブラウザのジェスチャーを抑制してポインタイベントを扱う */
   cursor: crosshair;
   background: #0b0d12;

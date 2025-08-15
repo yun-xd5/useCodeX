@@ -16,11 +16,16 @@ if (!canvas) throw new Error("canvas#app が見つかりません");
 const ctx = createCtx2D(canvas);
 const input = new Input(canvas);
 
-// 初期リサイズ & ウィンドウサイズ変化で更新
+// 初期リサイズ & ビューポート変化で更新（スマホのアドレスバー縮み等に対応）
 let dpr = fitCanvasToWindow(canvas, ctx);
-window.addEventListener("resize", () => {
+function resizeCanvas() {
   dpr = fitCanvasToWindow(canvas, ctx);
-});
+}
+window.addEventListener("resize", resizeCanvas);
+window.addEventListener("orientationchange", resizeCanvas);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", resizeCanvas);
+}
 
 // シーン管理
 const sceneManager = new SceneManager({ canvas, ctx });
@@ -108,7 +113,7 @@ const loop = createLoop({ update, render, ctx });
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) loop.stop();
   else {
-    fitCanvasToWindow(canvas, ctx);
+    resizeCanvas();
     loop.start();
   }
 });
