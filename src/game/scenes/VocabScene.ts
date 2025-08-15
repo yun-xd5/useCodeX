@@ -255,21 +255,26 @@ export class VocabScene implements Scene {
     const hdr = drawHeader(ctx, { leftLabel: "やめる" });
     this.quitRect = hdr.leftRect;
 
-    // Prompt text inside header, avoiding overlap with quit button and right-side score
+    // モバイル等の狭幅でレイアウトが重ならないように調整
+    // - 狭い幅ではフォントサイズを下げ、必要ならスコアを2段目に回す
+    const isNarrow = gw <= 420;
+    const promptFont = isNarrow ? "18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto" : "20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    const scoreFont = isNarrow ? "14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto" : "16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+
     ctx.fillStyle = "#e6e6e6";
-    ctx.font = "20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
     ctx.textBaseline = "middle";
     const prompt = this.currentPrompt();
     const leftX = Math.max(16, (this.quitRect ? this.quitRect.x + this.quitRect.w + 16 : 16));
 
     // score & lives
     const rightText = `スコア: ${this.score}   ライフ: ${"❤".repeat(this.lives)}${"·".repeat(Math.max(0, 3 - this.lives))}`;
-    const metrics = ctx.measureText(rightText);
-    const rightTextX = gw - metrics.width - 16;
-    ctx.fillText(rightText, rightTextX, 50);
+    ctx.font = scoreFont;
+    const scoreMetrics = ctx.measureText(rightText);
+    const rightTextX = gw - scoreMetrics.width - 16;
 
     // Ellipsize prompt if it would collide with right text
     const maxPromptW = Math.max(0, rightTextX - leftX - 8);
+    ctx.font = promptFont;
     let disp = prompt;
     if (ctx.measureText(disp).width > maxPromptW) {
       while (disp.length > 1 && ctx.measureText(disp + "…").width > maxPromptW) {
@@ -277,7 +282,14 @@ export class VocabScene implements Scene {
       }
       disp = disp + "…";
     }
-    ctx.fillText(disp, leftX, 50);
+    // 極端に狭い場合は2段レイアウトにする
+    const stacked = isNarrow || maxPromptW < 120;
+    const promptY = stacked ? 36 : 50;
+    const scoreY = stacked ? 64 : 50;
+    ctx.font = promptFont;
+    ctx.fillText(disp, leftX, promptY);
+    ctx.font = scoreFont;
+    ctx.fillText(rightText, rightTextX, scoreY);
 
     // result flash
     if (this.lastResult) {
