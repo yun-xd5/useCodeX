@@ -1,4 +1,5 @@
 import type { Scene, SceneContext } from "../../engine/scene";
+import { MainMenuScene } from "./MainMenuScene";
 import { Input } from "../../lib/input";
 import { clear } from "../../lib/canvas";
 import { gameWidth, gameHeight } from "../../engine/layout";
@@ -16,8 +17,11 @@ export class LevelSelectScene implements Scene {
   private input: Input;
   private ctx!: SceneContext;
   private options: Option[] = [];
+  private backRect: { x: number; y: number; w: number; h: number } | null = null;
   private loading: string | null = null; // path when loading
   private error: string | null = null;
+  private prevPointerDown = false;
+  private clickCooldown = 0; // seconds to absorb initial click
 
   constructor(input: Input) {
     this.input = input;
@@ -26,6 +30,8 @@ export class LevelSelectScene implements Scene {
   init(ctx: SceneContext): void {
     this.ctx = ctx;
     this.layout();
+    this.prevPointerDown = this.input.pointer.down;
+    this.clickCooldown = 0.15;
   }
 
   private layout(): void {
@@ -48,6 +54,10 @@ export class LevelSelectScene implements Scene {
       path: it.path,
       rect: { x: cx, y: startY + i * (bh + gap), w: bw, h: bh },
     }));
+    // back button (to Main Menu)
+    const bw2 = 180;
+    const bh2 = 44;
+    this.backRect = { x: 24, y: h - bh2 - 24, w: bw2, h: bh2 };
   }
 
   private isInside(x: number, y: number, r: { x: number; y: number; w: number; h: number }): boolean {
@@ -70,8 +80,17 @@ export class LevelSelectScene implements Scene {
   }
 
   update(_dt: number, _now: number): void {
-    // click select
-    if (this.input.pointer.down && this.input.pointer.x < gameWidth()) {
+    this.clickCooldown = Math.max(0, this.clickCooldown - _dt);
+
+    // block input while loading
+    if (this.loading) {
+      this.prevPointerDown = this.input.pointer.down;
+      return;
+    }
+
+    // click select (edge-trigger)
+    const justClicked = this.input.pointer.down && !this.prevPointerDown;
+    if (justClicked && this.clickCooldown <= 0 && this.input.pointer.x < gameWidth()) {
       for (const o of this.options) {
         if (this.isInside(this.input.pointer.x, this.input.pointer.y, o.rect)) {
           // fire-and-forget async; no await in update
@@ -79,12 +98,21 @@ export class LevelSelectScene implements Scene {
           break;
         }
       }
+      if (this.backRect && this.isInside(this.input.pointer.x, this.input.pointer.y, this.backRect)) {
+        this.ctx.goto(new MainMenuScene(this.input));
+        return;
+      }
     }
     // keyboard shortcuts 1-4
-    if (this.input.keys.has("1")) this.choose(this.options[0]);
-    if (this.input.keys.has("2")) this.choose(this.options[1]);
-    if (this.input.keys.has("3")) this.choose(this.options[2]);
-    if (this.input.keys.has("4")) this.choose(this.options[3]);
+    if (!this.loading) {
+      if (this.input.keys.has("1")) this.choose(this.options[0]);
+      if (this.input.keys.has("2")) this.choose(this.options[1]);
+      if (this.input.keys.has("3")) this.choose(this.options[2]);
+      if (this.input.keys.has("4")) this.choose(this.options[3]);
+    }
+    if (this.input.keys.has("Escape") || this.input.keys.has("m") || this.input.keys.has("M")) this.ctx.goto(new MainMenuScene(this.input));
+
+    this.prevPointerDown = this.input.pointer.down;
   }
 
   render(ctx: CanvasRenderingContext2D): void {
@@ -108,7 +136,7 @@ export class LevelSelectScene implements Scene {
       "遊び方:",
       "・日本語のヒントに合う英単語をクリック/タップで選択",
       "・判定後は クリック/Space/Enter で次の問題へ",
-      "・R でリスタート、右側はデバッグ表示",
+      "・Escでメインメニューに戻る / Rでリスタート",
     ];
     let ly = 120;
     for (const ln of lines) {
@@ -132,6 +160,23 @@ export class LevelSelectScene implements Scene {
       ctx.fillText(label, Math.floor(o.rect.x + (o.rect.w - tm.width) / 2), Math.floor(o.rect.y + o.rect.h / 2));
     }
     ctx.restore();
+
+    // Back button
+    if (this.backRect) {
+      const r = this.backRect;
+      ctx.save();
+      ctx.fillStyle = "#1a2333";
+      ctx.strokeStyle = "#2e6bff";
+      ctx.lineWidth = 2;
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+      const cap = "メインメニューへ (Esc/M)";
+      ctx.fillStyle = "#e6e6e6";
+      ctx.font = "16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+      const tm = ctx.measureText(cap);
+      ctx.fillText(cap, Math.floor(r.x + (r.w - tm.width) / 2), Math.floor(r.y + r.h / 2 - 6));
+      ctx.restore();
+    }
 
     // Loading / error
     if (this.loading) {

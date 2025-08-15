@@ -4,7 +4,9 @@ import { clamp } from "../../engine/math";
 import { Entity } from "../../engine/entity";
 import type { Scene, SceneContext } from "../../engine/scene";
 import { DEBUG_PANEL_W, gameWidth, gameHeight } from "../../engine/layout";
+import { drawHeader, HEADER_H } from "../../engine/ui";
 import { LevelSelectScene } from "./LevelSelectScene";
+import { MainMenuScene } from "./MainMenuScene";
 
 type Choice = {
   text: string;
@@ -63,10 +65,12 @@ export class VocabScene implements Scene {
   private messageTimer = 0;
   private prevPointerDown = false;
   private feedbackChoice: Choice | null = null;
+  private quitRect: { x: number; y: number; w: number; h: number } | null = null;
 
   private static readonly FEEDBACK_DURATION = 0.9; // seconds
   private pool: VocabItem[];
   private ctxRef?: SceneContext;
+  private entryClickCooldown = 0; // seconds to absorb entering click
 
   constructor(input: Input, items: VocabItem[]) {
     this.input = input;
@@ -85,6 +89,9 @@ export class VocabScene implements Scene {
     this.messageTimer = 0;
     this.player.pos = { x: gameWidth() / 2, y: gameHeight() - 60 };
     this.setupChoices();
+    // absorb click from previous scene
+    this.prevPointerDown = this.input.pointer.down;
+    this.entryClickCooldown = 0.15;
   }
 
   private setupChoices(): void {
@@ -100,9 +107,10 @@ export class VocabScene implements Scene {
     const gh = gameHeight();
     const boxW = Math.min(360, Math.floor(gw / 2) - margin * 1.5);
     const boxH = 80;
+    const topY = HEADER_H + margin;
     const positions = [
-      { x: margin, y: 140 },
-      { x: gw - margin - boxW, y: 140 },
+      { x: margin, y: topY },
+      { x: gw - margin - boxW, y: topY },
       { x: margin, y: gh - margin - boxH },
       { x: gw - margin - boxW, y: gh - margin - boxH },
     ];
@@ -165,6 +173,21 @@ export class VocabScene implements Scene {
       return;
     }
 
+    // Common edge-click detection for in-play UI
+    const justClicked = this.input.pointer.down && !this.prevPointerDown;
+    if (justClicked && this.input.pointer.x < gameWidth()) {
+      // Quit button
+      if (this.quitRect) {
+        const p = this.input.pointer;
+        const r = this.quitRect;
+        if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
+          if (this.ctxRef) this.ctxRef.goto(new LevelSelectScene(this.input));
+          this.prevPointerDown = this.input.pointer.down;
+          return;
+        }
+      }
+    }
+
     // player-based selection disabled; use click/tap only
 
     if (this.locked) {
@@ -179,13 +202,31 @@ export class VocabScene implements Scene {
       if (clickInGame || advanceKey) {
         this.next();
       }
+      // direct back to game menu/MainMenu shortcuts
+      if (this.input.keys.has("Escape") || this.input.keys.has("g") || this.input.keys.has("G")) {
+        if (this.ctxRef) this.ctxRef.goto(new LevelSelectScene(this.input));
+      }
+      if (this.input.keys.has("m") || this.input.keys.has("M")) {
+        if (this.ctxRef) this.ctxRef.goto(new MainMenuScene(this.input));
+      }
       this.prevPointerDown = this.input.pointer.down;
       return;
     }
 
+    // Global shortcuts while playing
+    if (this.input.keys.has("Escape") || this.input.keys.has("g") || this.input.keys.has("G")) {
+      if (this.ctxRef) this.ctxRef.goto(new LevelSelectScene(this.input));
+      return;
+    }
+    if (this.input.keys.has("m") || this.input.keys.has("M")) {
+      if (this.ctxRef) this.ctxRef.goto(new MainMenuScene(this.input));
+      return;
+    }
+
     // click/tap on choice (edge trigger on pointer down)
-    const justClicked = this.input.pointer.down && !this.prevPointerDown;
-    if (justClicked && this.input.pointer.x < gameWidth()) {
+    // drain initial cooldown
+    this.entryClickCooldown = Math.max(0, this.entryClickCooldown - dt);
+    if (justClicked && this.entryClickCooldown <= 0 && this.input.pointer.x < gameWidth()) {
       for (const c of this.choices) {
         const p = this.input.pointer;
         if (
@@ -210,17 +251,32 @@ export class VocabScene implements Scene {
     ctx.save();
     // top bar over game viewport only
     const gw = gameWidth();
-    ctx.fillStyle = "#0f1420";
-    ctx.fillRect(0, 0, gw, 100);
+    const hdr = drawHeader(ctx, { leftLabel: "やめる" });
+    this.quitRect = hdr.leftRect;
+
+    // Prompt text inside header, avoiding overlap with quit button and right-side score
     ctx.fillStyle = "#e6e6e6";
     ctx.font = "20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
     ctx.textBaseline = "middle";
-    ctx.fillText(this.currentPrompt(), 16, 50);
+    const prompt = this.currentPrompt();
+    const leftX = Math.max(16, (this.quitRect ? this.quitRect.x + this.quitRect.w + 16 : 16));
 
     // score & lives
     const rightText = `スコア: ${this.score}   ライフ: ${"❤".repeat(this.lives)}${"·".repeat(Math.max(0, 3 - this.lives))}`;
     const metrics = ctx.measureText(rightText);
-    ctx.fillText(rightText, gw - metrics.width - 16, 50);
+    const rightTextX = gw - metrics.width - 16;
+    ctx.fillText(rightText, rightTextX, 50);
+
+    // Ellipsize prompt if it would collide with right text
+    const maxPromptW = Math.max(0, rightTextX - leftX - 8);
+    let disp = prompt;
+    if (ctx.measureText(disp).width > maxPromptW) {
+      while (disp.length > 1 && ctx.measureText(disp + "…").width > maxPromptW) {
+        disp = disp.slice(0, -1);
+      }
+      disp = disp + "…";
+    }
+    ctx.fillText(disp, leftX, 50);
 
     // result flash
     if (this.lastResult) {
@@ -306,7 +362,7 @@ export class VocabScene implements Scene {
     ctx.textBaseline = "top";
     const title = this.lives > 0 ? "クリア！" : "ゲームオーバー";
     const result = `スコア: ${this.score} / ${this.questions.length}`;
-    const guide = "クリックでメニューへ / Rでリスタート";
+    const guide = "クリックでゲームメニューへ / Rでリスタート / Mでメイン";
     ctx.fillText(title, 40, 120);
     ctx.fillText(result, 40, 160);
     ctx.fillText(guide, 40, 200);
@@ -338,7 +394,7 @@ export class VocabScene implements Scene {
       ctx.font = "36px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
       const tm = ctx.measureText(text);
       const x = Math.floor((gameWidth() - tm.width) / 2);
-      const y = Math.floor(120);
+      const y = Math.floor(HEADER_H + 20);
       // fade + slight pop
       const alpha = 1 - t * 0.6;
       ctx.globalAlpha = alpha;

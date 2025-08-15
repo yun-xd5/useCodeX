@@ -7,7 +7,7 @@ import { createCtx2D, fitCanvasToWindow, clear } from "./lib/canvas";
 import { createLoop } from "./lib/loop";
 import { Input } from "./lib/input";
 import { SceneManager } from "./engine/scene";
-import { LevelSelectScene } from "./game/scenes/LevelSelectScene";
+import { MainMenuScene } from "./game/scenes/MainMenuScene";
 import { DEBUG_PANEL_W, gameWidth, isDebugPanelEnabled, setDebugPanelEnabled } from "./engine/layout";
 
 const canvas = document.getElementById("app") as HTMLCanvasElement | null;
@@ -25,7 +25,7 @@ window.addEventListener("resize", () => {
 // シーン管理
 const sceneManager = new SceneManager({ canvas, ctx });
 setDebugPanelEnabled(false);
-sceneManager.set(new LevelSelectScene(input));
+sceneManager.set(new MainMenuScene(input));
 
 // 更新処理
 let debugVisible = false;
