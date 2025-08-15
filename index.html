@@ -4,11 +4,22 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Canvas App Base</title>
+    <!-- アプリ全体のレイアウト用スタイル -->
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <!--
+      メイン描画用の Canvas 要素
+      - リサイズ・DPR 対応などは src/main.ts 側で制御
+    -->
     <canvas id="app" aria-label="Canvas application"></canvas>
     <noscript>このアプリを動かすにはJavaScriptを有効にしてください。</noscript>
+    <!--
+      Vite のエントリポイント
+      - 開発時:  /src/main.ts（開発サーバーから提供）
+      - 本番時:  Vite がビルド時に import 連鎖を解決して dist/ に出力
+      - Pages では vite.config.ts の base 設定により配信パスを調整
+    -->
     <script type="module" src="/src/main.ts"></script>
   </body>
   </html>

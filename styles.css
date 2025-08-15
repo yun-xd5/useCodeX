@@ -1,4 +1,7 @@
-/* Minimal full-viewport canvas layout */
+/*
+  画面全体にキャンバスを表示するための最小スタイル
+  - レイアウトは極力シンプルにし、描画は Canvas 側で実施
+*/
 html, body {
   height: 100%;
 }
@@ -14,12 +17,12 @@ body {
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
+/* 描画用キャンバスをビューポートいっぱいに広げる */
 canvas#app {
   display: block;
   width: 100vw;
   height: 100vh;
-  touch-action: none; /* allow pointer events without browser gestures */
+  touch-action: none; /* ブラウザのジェスチャーを抑制してポインタイベントを扱う */
   cursor: crosshair;
   background: #0b0d12;
 }
-

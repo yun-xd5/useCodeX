@@ -1,3 +1,7 @@
+# GitHub Pages へ Vite ビルド成果物をデプロイするワークフロー
+# - main ブランチへの push で自動実行
+# - 必要なファイル変更に限定して起動（paths フィルタ）
+# - 手動実行（workflow_dispatch）にも対応
 name: Deploy to GitHub Pages
 on:
   push:
@@ -11,10 +15,12 @@ on:
       - 'tsconfig.json'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
+# Pages へ公開するための権限設定（GITHUB_TOKEN）
 permissions:
   contents: read
   pages: write
   id-token: write
+# 並列実行制御：pages グループで最新のみを有効に
 concurrency:
   group: pages
   cancel-in-progress: true
@@ -23,18 +29,24 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # リポジトリの内容をチェックアウト
       - uses: actions/checkout@v4
+      # GitHub Pages の公開設定を適用
       - name: Setup Pages
         uses: actions/configure-pages@v5
+      # Node 20 をセットアップし、npm キャッシュを有効化
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: package-lock.json
+      # 依存関係をクリーンインストール
       - run: npm ci
+      # TypeScript ビルド + Vite ビルド（dist/ 出力）
       - run: npm run build
       # SPA用：404.html を index.html のコピーで用意（ルーター対策）
       - run: cp dist/index.html dist/404.html
+      # dist/ を Pages へアップロードする成果物として登録
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
@@ -46,5 +58,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # 上でアップロードした成果物を GitHub Pages にデプロイ
       - id: deployment
         uses: actions/deploy-pages@v4
