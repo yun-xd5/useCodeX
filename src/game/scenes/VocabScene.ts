@@ -248,6 +248,36 @@ export class VocabScene implements Scene {
     this.prevPointerDown = this.input.pointer.down;
   }
 
+  // 指定幅で文字列を文字単位で折り返す（最大 maxLines 行、超過時は末尾に…）
+  private wrapByChar(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): string[] {
+    const lines: string[] = [];
+    let cur = "";
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const next = cur + ch;
+      if (ctx.measureText(next).width <= maxWidth) {
+        cur = next;
+        continue;
+      }
+      // 折り返し
+      lines.push(cur);
+      if (lines.length >= maxLines - 1) {
+        // 残りは最終行に省略付加
+        let tail = "";
+        for (let j = i; j < text.length; j++) {
+          const candidate = tail + text[j];
+          if (ctx.measureText(candidate + "…").width <= maxWidth) tail = candidate;
+          else break;
+        }
+        lines.push(tail + "…");
+        return lines;
+      }
+      cur = ch;
+    }
+    if (cur) lines.push(cur);
+    return lines.slice(0, maxLines);
+  }
+
   private drawHUD(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     // top bar over game viewport only
@@ -255,41 +285,33 @@ export class VocabScene implements Scene {
     const hdr = drawHeader(ctx, { leftLabel: "やめる" });
     this.quitRect = hdr.leftRect;
 
-    // モバイル等の狭幅でレイアウトが重ならないように調整
-    // - 狭い幅ではフォントサイズを下げ、必要ならスコアを2段目に回す
+    // レイアウト: 1行目=ボタンとスコア、2行目以降=問題文（折り返し）
     const isNarrow = gw <= 420;
-    const promptFont = isNarrow ? "18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto" : "20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
     const scoreFont = isNarrow ? "14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto" : "16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    const promptFont = isNarrow ? "18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto" : "20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
 
     ctx.fillStyle = "#e6e6e6";
     ctx.textBaseline = "middle";
-    const prompt = this.currentPrompt();
-    const leftX = Math.max(16, (this.quitRect ? this.quitRect.x + this.quitRect.w + 16 : 16));
 
-    // score & lives
+    // 右上にスコア
     const rightText = `スコア: ${this.score}   ライフ: ${"❤".repeat(this.lives)}${"·".repeat(Math.max(0, 3 - this.lives))}`;
     ctx.font = scoreFont;
-    const scoreMetrics = ctx.measureText(rightText);
-    const rightTextX = gw - scoreMetrics.width - 16;
-
-    // Ellipsize prompt if it would collide with right text
-    const maxPromptW = Math.max(0, rightTextX - leftX - 8);
-    ctx.font = promptFont;
-    let disp = prompt;
-    if (ctx.measureText(disp).width > maxPromptW) {
-      while (disp.length > 1 && ctx.measureText(disp + "…").width > maxPromptW) {
-        disp = disp.slice(0, -1);
-      }
-      disp = disp + "…";
-    }
-    // 極端に狭い場合は2段レイアウトにする
-    const stacked = isNarrow || maxPromptW < 120;
-    const promptY = stacked ? 36 : 50;
-    const scoreY = stacked ? 64 : 50;
-    ctx.font = promptFont;
-    ctx.fillText(disp, leftX, promptY);
-    ctx.font = scoreFont;
+    const scoreW = ctx.measureText(rightText).width;
+    const rightTextX = gw - scoreW - 16;
+    const scoreY = 32;
     ctx.fillText(rightText, rightTextX, scoreY);
+
+    // 2行目以降に問題文（最大2行）
+    const prompt = this.currentPrompt();
+    ctx.font = promptFont;
+    const maxW = Math.max(0, gw - 32);
+    const lines = this.wrapByChar(ctx, prompt, maxW, 2);
+    const lineH = isNarrow ? 22 : 24;
+    let y = 60;
+    for (const ln of lines) {
+      ctx.fillText(ln, 16, y);
+      y += lineH;
+    }
 
     // result flash
     if (this.lastResult) {
