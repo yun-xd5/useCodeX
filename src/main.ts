@@ -6,6 +6,9 @@
 import { createCtx2D, fitCanvasToWindow, clear } from "./lib/canvas";
 import { createLoop } from "./lib/loop";
 import { Input } from "./lib/input";
+import { SceneManager } from "./engine/scene";
+import { LevelSelectScene } from "./game/scenes/LevelSelectScene";
+import { DEBUG_PANEL_W, gameWidth, isDebugPanelEnabled, setDebugPanelEnabled } from "./engine/layout";
 
 const canvas = document.getElementById("app") as HTMLCanvasElement | null;
 if (!canvas) throw new Error("canvas#app が見つかりません");
@@ -19,50 +22,62 @@ window.addEventListener("resize", () => {
   dpr = fitCanvasToWindow(canvas, ctx);
 });
 
-// デモ用の状態
-const state = {
-  angle: 0,
-  speed: Math.PI / 2, // 角速度(rad/s)
-  time: 0,
-};
+// シーン管理
+const sceneManager = new SceneManager({ canvas, ctx });
+setDebugPanelEnabled(false);
+sceneManager.set(new LevelSelectScene(input));
 
 // 更新処理
+let debugVisible = false;
+let prevF4 = false;
+
 function update(dt: number, now: number): void {
-  state.time = now / 1000;
+  // Toggle debug panel with F4 (edge)
+  const f4 = input.keys.has("F4");
+  if (f4 && !prevF4) {
+    debugVisible = !debugVisible;
+    setDebugPanelEnabled(debugVisible);
+  }
+  prevF4 = f4;
 
-  // 簡単な操作: 上下キーで速度を調整
-  if (input.keys.has("ArrowUp")) state.speed += 0.5 * dt;
-  if (input.keys.has("ArrowDown")) state.speed -= 0.5 * dt;
-  state.speed = Math.max(0, Math.min(4, state.speed));
-
-  state.angle += state.speed * dt;
+  sceneManager.update(dt, now);
 }
 
 // オーバーレイ（FPS 等）描画
 function renderOverlay(ctx: CanvasRenderingContext2D, fps: number): void {
   ctx.save();
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-  ctx.textBaseline = "top";
+  if (isDebugPanelEnabled()) {
+    // Draw right-side debug panel background
+    const gx = gameWidth();
+    ctx.fillStyle = "#0f1420";
+    ctx.fillRect(gx, 0, DEBUG_PANEL_W, window.innerHeight);
+    // Divider
+    ctx.strokeStyle = "#1f2a3d";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(gx + 0.5, 0);
+    ctx.lineTo(gx + 0.5, window.innerHeight);
+    ctx.stroke();
 
-  const lines = [
-    `FPS: ${fps.toFixed(1)}`,
-    `Speed: ${state.speed.toFixed(2)} rad/s`,
-    `Pointer: ${Math.round(input.pointer.x)}, ${Math.round(input.pointer.y)} ${
-      input.pointer.down ? "(down)" : ""
-    }`,
-    `DPR: ${dpr}`,
-    `Keys: ${[...input.keys].join(", ")}`,
-  ];
-
-  let y = 8;
-  for (const line of lines) {
-    // 影
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.fillText(line, 9, y + 1);
+    // Debug text inside the panel (Japanese labels)
     ctx.fillStyle = "#e6e6e6";
-    ctx.fillText(line, 8, y);
-    y += 16;
+    ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.textBaseline = "top";
+    const pad = 10;
+    const x = gx + pad;
+    const lines = [
+      `FPS: ${fps.toFixed(1)}`,
+      `ポインタ: ${Math.round(input.pointer.x)}, ${Math.round(input.pointer.y)} ${
+        input.pointer.down ? "(押下)" : ""
+      }`,
+      `DPR: ${dpr}`,
+      `押下キー: ${[...input.keys].join(", ")}`,
+    ];
+    let y = pad;
+    for (const line of lines) {
+      ctx.fillText(line, x, y);
+      y += 16;
+    }
   }
   ctx.restore();
 }
@@ -70,37 +85,14 @@ function renderOverlay(ctx: CanvasRenderingContext2D, fps: number): void {
 // 描画処理
 function render(
   ctx: CanvasRenderingContext2D,
-  _now: number,
-  _dt: number,
+  now: number,
+  dt: number,
   { fps }: { fps: number }
 ): void {
   clear(ctx, "#0b0d12");
+  sceneManager.render(now, dt);
 
-  const w = Math.floor(window.innerWidth);
-  const h = Math.floor(window.innerHeight);
-
-  // 中心で回転する四角形
-  const size = Math.min(w, h) * 0.12;
-  ctx.save();
-  ctx.translate(w / 2, h / 2);
-  ctx.rotate(state.angle);
-
-  // ベースの四角形
-  ctx.fillStyle = "#2e6bff";
-  ctx.fillRect(-size / 2, -size / 2, size, size);
-
-  // 十字のライン
-  ctx.strokeStyle = "#9cc1ff";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(-size / 2, 0);
-  ctx.lineTo(size / 2, 0);
-  ctx.moveTo(0, -size / 2);
-  ctx.lineTo(0, size / 2);
-  ctx.stroke();
-  ctx.restore();
-
-  // ポインタ表示
+  // ポインタ表示（HUD）
   ctx.save();
   ctx.strokeStyle = input.pointer.down ? "#ff7a7a" : "#4cff85";
   ctx.beginPath();
@@ -123,4 +115,3 @@ document.addEventListener("visibilitychange", () => {
 
 // 開始
 loop.start();
-
