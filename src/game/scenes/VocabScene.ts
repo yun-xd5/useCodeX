@@ -53,6 +53,11 @@ function rectsIntersect(a: { x: number; y: number; w: number; h: number }, b: { 
 
 type VocabItem = { jp: string; en: string };
 
+// ブラウザリロードで消えて良い一時的なプレイ履歴（最新順）
+type PlayRecord = { time: number; label: string; score: number; total: number };
+const playHistory: PlayRecord[] = [];
+const MAX_HISTORY = 10;
+
 export class VocabScene implements Scene {
   private input: Input;
   private player: Player;
@@ -67,16 +72,19 @@ export class VocabScene implements Scene {
   private prevPointerDown = false;
   private feedbackChoice: Choice | null = null;
   private quitRect: { x: number; y: number; w: number; h: number } | null = null;
+  private label: string;
+  private recordedThisRun = false;
 
   private static readonly FEEDBACK_DURATION = 0.9; // seconds
   private pool: VocabItem[];
   private ctxRef?: SceneContext;
   private entryClickCooldown = 0; // seconds to absorb entering click
 
-  constructor(input: Input, items: VocabItem[]) {
+  constructor(input: Input, items: VocabItem[], label: string) {
     this.input = input;
     this.player = new Player(this.input);
     this.pool = items;
+    this.label = label;
   }
 
   init(ctx?: SceneContext): void {
@@ -93,6 +101,7 @@ export class VocabScene implements Scene {
     // absorb click from previous scene
     this.prevPointerDown = this.input.pointer.down;
     this.entryClickCooldown = 0.15;
+    this.recordedThisRun = false;
   }
 
   private setupChoices(): void {
@@ -162,6 +171,12 @@ export class VocabScene implements Scene {
     const done = this.index >= this.questions.length || this.lives <= 0;
     // End screen interactions
     if (done) {
+      // プレイ履歴に登録（この周回で1回だけ）
+      if (!this.recordedThisRun) {
+        playHistory.unshift({ time: Date.now(), label: this.label, score: this.score, total: this.questions.length });
+        if (playHistory.length > MAX_HISTORY) playHistory.length = MAX_HISTORY;
+        this.recordedThisRun = true;
+      }
       const justClicked = this.input.pointer.down && !this.prevPointerDown;
       const clickInGame = justClicked && this.input.pointer.x < gameWidth();
       const backKey = this.input.keys.has(" ") || this.input.keys.has("Space") || this.input.keys.has("Enter") || this.input.keys.has("Escape");
@@ -393,14 +408,45 @@ export class VocabScene implements Scene {
     ctx.fillRect(0, 0, gameWidth(), gameHeight());
     ctx.globalAlpha = 1;
     ctx.fillStyle = "#e6e6e6";
-    ctx.font = "28px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
     ctx.textBaseline = "top";
+    const gw = gameWidth();
+    const marginX = 24;
+    let y = 110;
+    // タイトル
+    ctx.font = "28px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
     const title = this.lives > 0 ? "クリア！" : "ゲームオーバー";
-    const result = `スコア: ${this.score} / ${this.questions.length}`;
+    ctx.fillText(title, marginX, y);
+    y += 36;
+    // 結果
+    ctx.font = "20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    const result = `スコア: ${this.score} / ${this.questions.length}   レベル: ${this.label}`;
+    ctx.fillText(result, marginX, y);
+    y += 28;
+    // ガイド（折り返し）
+    ctx.font = "16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
     const guide = "クリックでゲームメニューへ / Rでリスタート / Mでメイン";
-    ctx.fillText(title, 40, 120);
-    ctx.fillText(result, 40, 160);
-    ctx.fillText(guide, 40, 200);
+    const guideLines = this.wrapByChar(ctx, guide, Math.max(0, gw - marginX * 2), 2);
+    for (const ln of guideLines) {
+      ctx.fillText(ln, marginX, y);
+      y += 20;
+    }
+    y += 8;
+    // プレイ履歴
+    ctx.font = "18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText("プレイ履歴 (最新5件)", marginX, y);
+    y += 26;
+    ctx.font = "14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+    const rows = playHistory.slice(0, 5);
+    for (const r of rows) {
+      const d = new Date(r.time);
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      const line = `${hh}:${mm}  ${r.label}  ${r.score}/${r.total}`;
+      // 折り返し（1行分に収まらないときは…）
+      const trimmed = this.wrapByChar(ctx, line, Math.max(0, gw - marginX * 2), 1)[0] ?? line;
+      ctx.fillText(trimmed, marginX, y);
+      y += 18;
+    }
     ctx.restore();
   }
 

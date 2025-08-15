@@ -76,7 +76,8 @@ export class LevelSelectScene implements Scene {
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = (await res.json()) as VocabItem[];
       const { VocabScene } = await import("./VocabScene");
-      this.ctx.goto(new VocabScene(this.input, data));
+      // レベル名（ラベル）も渡してプレイ履歴に残せるようにする
+      this.ctx.goto(new VocabScene(this.input, data, opt.label));
     } catch (e: any) {
       this.error = e?.message ?? String(e);
       this.loading = null;
