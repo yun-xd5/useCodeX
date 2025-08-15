@@ -74,6 +74,7 @@ export class VocabScene implements Scene {
   private quitRect: { x: number; y: number; w: number; h: number } | null = null;
   private label: string;
   private recordedThisRun = false;
+  private hudBottomY = 60; // HUD(ヘッダー+問題文)の下端Y座標
 
   private static readonly FEEDBACK_DURATION = 0.9; // seconds
   private pool: VocabItem[];
@@ -263,34 +264,21 @@ export class VocabScene implements Scene {
     this.prevPointerDown = this.input.pointer.down;
   }
 
-  // 指定幅で文字列を文字単位で折り返す（最大 maxLines 行、超過時は末尾に…）
-  private wrapByChar(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): string[] {
+  // 指定幅で文字列を文字単位で折り返す（省略なし・すべての行を返す）
+  private wrapByChar(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
     const lines: string[] = [];
     let cur = "";
-    for (let i = 0; i < text.length; i++) {
-      const ch = text[i];
+    for (const ch of text) {
       const next = cur + ch;
       if (ctx.measureText(next).width <= maxWidth) {
         cur = next;
-        continue;
+      } else {
+        lines.push(cur);
+        cur = ch;
       }
-      // 折り返し
-      lines.push(cur);
-      if (lines.length >= maxLines - 1) {
-        // 残りは最終行に省略付加
-        let tail = "";
-        for (let j = i; j < text.length; j++) {
-          const candidate = tail + text[j];
-          if (ctx.measureText(candidate + "…").width <= maxWidth) tail = candidate;
-          else break;
-        }
-        lines.push(tail + "…");
-        return lines;
-      }
-      cur = ch;
     }
     if (cur) lines.push(cur);
-    return lines.slice(0, maxLines);
+    return lines;
   }
 
   private drawHUD(ctx: CanvasRenderingContext2D): void {
@@ -300,7 +288,7 @@ export class VocabScene implements Scene {
     const hdr = drawHeader(ctx, { leftLabel: "やめる" });
     this.quitRect = hdr.leftRect;
 
-    // レイアウト: 1行目=ボタンとスコア、2行目以降=問題文（折り返し）
+    // レイアウト: 1行目=ボタンとスコア、2行目以降=問題文（折り返し・省略なし）
     const isNarrow = gw <= 420;
     const scoreFont = isNarrow ? "14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto" : "16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
     const promptFont = isNarrow ? "18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto" : "20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
@@ -316,17 +304,18 @@ export class VocabScene implements Scene {
     const scoreY = 32;
     ctx.fillText(rightText, rightTextX, scoreY);
 
-    // 2行目以降に問題文（最大2行）
+    // 2行目以降に問題文（省略なしで折り返し）
     const prompt = this.currentPrompt();
     ctx.font = promptFont;
     const maxW = Math.max(0, gw - 32);
-    const lines = this.wrapByChar(ctx, prompt, maxW, 2);
+    const lines = this.wrapByChar(ctx, prompt, maxW);
     const lineH = isNarrow ? 22 : 24;
     let y = 60;
     for (const ln of lines) {
       ctx.fillText(ln, 16, y);
       y += lineH;
     }
+    this.hudBottomY = y; // この位置より下にゲームUIを配置する
 
     // result flash
     if (this.lastResult) {
@@ -341,7 +330,27 @@ export class VocabScene implements Scene {
   private drawChoices(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     ctx.font = "24px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
-    for (const c of this.choices) {
+    // ヘッダー+問題文の下に来るように、ボックスY座標を動的再配置
+    const margin = 40;
+    const gw = gameWidth();
+    const gh = gameHeight();
+    const boxW = Math.min(360, Math.floor(gw / 2) - margin * 1.5);
+    const boxH = 80;
+    const topY = Math.max(this.hudBottomY + 16, HEADER_H + margin);
+    const positions = [
+      { x: margin, y: topY },
+      { x: gw - margin - boxW, y: topY },
+      { x: margin, y: gh - margin - boxH },
+      { x: gw - margin - boxW, y: gh - margin - boxH },
+    ];
+    for (let i = 0; i < this.choices.length; i++) {
+      const c = this.choices[i];
+      const p = positions[i];
+      c.rect.x = p.x;
+      c.rect.y = p.y;
+      c.rect.w = boxW;
+      c.rect.h = boxH;
+
       // box
       ctx.fillStyle = "#1a2333";
       ctx.strokeStyle = "#2e6bff";
@@ -417,20 +426,14 @@ export class VocabScene implements Scene {
     const title = this.lives > 0 ? "クリア！" : "ゲームオーバー";
     ctx.fillText(title, marginX, y);
     y += 36;
-    // 結果
+    // 結果（レベル名やスコアが長い場合は折り返し）
     ctx.font = "20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
-    const result = `スコア: ${this.score} / ${this.questions.length}   レベル: ${this.label}`;
-    ctx.fillText(result, marginX, y);
-    y += 28;
-    // ガイド（折り返し）
-    ctx.font = "16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
-    const guide = "クリックでゲームメニューへ / Rでリスタート / Mでメイン";
-    const guideLines = this.wrapByChar(ctx, guide, Math.max(0, gw - marginX * 2), 2);
-    for (const ln of guideLines) {
+    const result = `レベル: ${this.label}    スコア: ${this.score} / ${this.questions.length}`;
+    for (const ln of this.wrapByChar(ctx, result, Math.max(0, gw - marginX * 2))) {
       ctx.fillText(ln, marginX, y);
-      y += 20;
+      y += 24;
     }
-    y += 8;
+    y += 4;
     // プレイ履歴
     ctx.font = "18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
     ctx.fillText("プレイ履歴 (最新5件)", marginX, y);
@@ -442,10 +445,10 @@ export class VocabScene implements Scene {
       const hh = String(d.getHours()).padStart(2, "0");
       const mm = String(d.getMinutes()).padStart(2, "0");
       const line = `${hh}:${mm}  ${r.label}  ${r.score}/${r.total}`;
-      // 折り返し（1行分に収まらないときは…）
-      const trimmed = this.wrapByChar(ctx, line, Math.max(0, gw - marginX * 2), 1)[0] ?? line;
-      ctx.fillText(trimmed, marginX, y);
-      y += 18;
+      for (const ln of this.wrapByChar(ctx, line, Math.max(0, gw - marginX * 2))) {
+        ctx.fillText(ln, marginX, y);
+        y += 18;
+      }
     }
     ctx.restore();
   }
@@ -467,7 +470,7 @@ export class VocabScene implements Scene {
     this.drawChoices(ctx);
     ctx.restore();
 
-    // center feedback text + proceed hint
+    // center feedback text（操作ガイドは表示しない）
     if (this.locked && this.lastResult) {
       const t = 1 - Math.max(0, this.messageTimer) / VocabScene.FEEDBACK_DURATION; // 0→1
       const text = this.lastResult === "correct" ? "正解！" : "不正解";
@@ -481,13 +484,6 @@ export class VocabScene implements Scene {
       ctx.globalAlpha = alpha;
       ctx.fillStyle = this.lastResult === "correct" ? "#4cff85" : "#ff7a7a";
       ctx.fillText(text, x, y);
-      // proceed hint
-      ctx.font = "16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
-      const hint = "クリックまたはSpaceで次へ";
-      const hm = ctx.measureText(hint);
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = "#e6e6e6";
-      ctx.fillText(hint, Math.floor((gameWidth() - hm.width) / 2), y + 36 + 12);
       ctx.restore();
     }
     this.drawGameOver(ctx);
