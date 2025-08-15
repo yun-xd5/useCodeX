@@ -10,8 +10,9 @@ import { SceneManager } from "./engine/scene";
 import { MainMenuScene } from "./game/scenes/MainMenuScene";
 import { DEBUG_PANEL_W, gameWidth, isDebugPanelEnabled, setDebugPanelEnabled } from "./engine/layout";
 
-const canvas = document.getElementById("app") as HTMLCanvasElement | null;
-if (!canvas) throw new Error("canvas#app が見つかりません");
+const canvasMaybe = document.getElementById("app") as HTMLCanvasElement | null;
+if (!canvasMaybe) throw new Error("canvas#app が見つかりません");
+const canvas: HTMLCanvasElement = canvasMaybe; // 非nullを明示
 
 const ctx = createCtx2D(canvas);
 const input = new Input(canvas);
