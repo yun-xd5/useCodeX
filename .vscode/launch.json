@@ -1,0 +1,14 @@
+{
+  // F5 で Vite 開発サーバを起動し、Chrome デバッグを開始
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "デバッグ: Vite + Chrome",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5175",
+      "webRoot": "${workspaceFolder}",
+      "sourceMaps": true
+    }
+  ]
+}

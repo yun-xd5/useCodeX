@@ -1,0 +1,23 @@
+{
+	"name": "Node.js Dev Container",
+	"image": "mcr.microsoft.com/devcontainers/javascript-node:22", // Node.js 22ベース
+	"features": {
+		"ghcr.io/devcontainers/features/git:1": {},
+		"ghcr.io/devcontainers/features/github-cli:1": {}
+	},
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"editor.formatOnSave": true,
+				"files.eol": "\n",
+				"terminal.integrated.defaultProfile.linux": "bash"
+			},
+			"extensions": [
+				"dbaeumer.vscode-eslint",
+				"esbenp.prettier-vscode"
+			]
+		}
+	},
+	"postCreateCommand": "npm install",
+	"remoteUser": "node"
+}
