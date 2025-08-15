@@ -9,7 +9,7 @@ type VocabItem = { jp: string; en: string };
 type Option = {
   key: string;
   label: string;
-  path: string; // public path to JSON
+  path: string; // 公開ディレクトリ(public/)配下の JSON へのパス
   rect: { x: number; y: number; w: number; h: number };
 };
 
@@ -42,11 +42,15 @@ export class LevelSelectScene implements Scene {
     const cx = Math.floor((w - bw) / 2);
     const startY = Math.floor(h / 2) - (bh * 2 + 16 * 1.5); // four buttons centered roughly
     const gap = 16;
+    // 注意: GitHub Pages（プロジェクトサイト）の場合は配信パスが '/<repo>/' になる
+    // Vite の base 設定は import.meta.env.BASE_URL に入るため、それを先頭に付与して
+    // どの環境（ローカル/Pages）でも正しいパスに解決されるようにする
+    const base = import.meta.env.BASE_URL; // 末尾にスラッシュが付いている想定
     const items = [
-      { key: "1", label: "英検3級", path: "/data/eiken3.json" },
-      { key: "2", label: "英検準2級", path: "/data/eiken_pre2.json" },
-      { key: "3", label: "英検2級", path: "/data/eiken2.json" },
-      { key: "4", label: "英検準1級", path: "/data/eiken_pre1.json" },
+      { key: "1", label: "英検3級", path: `${base}data/eiken3.json` },
+      { key: "2", label: "英検準2級", path: `${base}data/eiken_pre2.json` },
+      { key: "3", label: "英検2級", path: `${base}data/eiken2.json` },
+      { key: "4", label: "英検準1級", path: `${base}data/eiken_pre1.json` },
     ];
     this.options = items.map((it, i) => ({
       key: it.key,
