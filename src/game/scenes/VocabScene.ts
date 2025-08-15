@@ -1,7 +1,6 @@
 import { clear } from "../../lib/canvas";
 import { Input } from "../../lib/input";
 import { clamp } from "../../engine/math";
-import { Entity } from "../../engine/entity";
 import type { Scene, SceneContext } from "../../engine/scene";
 import { DEBUG_PANEL_W, gameWidth, gameHeight } from "../../engine/layout";
 import { drawHeader, HEADER_H } from "../../engine/ui";
@@ -14,10 +13,12 @@ type Choice = {
   correct: boolean;
 };
 
-class Player extends Entity {
+class Player {
   input: Input;
+  pos: { x: number; y: number } = { x: 0, y: 0 };
+  vel: { x: number; y: number } = { x: 0, y: 0 };
+  size: { x: number; y: number } = { x: 24, y: 24 };
   constructor(input: Input) {
-    super({ x: 0, y: 0 }, { x: 24, y: 24 });
     this.input = input;
   }
   update(dt: number): void {
